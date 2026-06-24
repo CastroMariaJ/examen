@@ -1,0 +1,1190 @@
+// ============================================================================
+// PLATAFORMA DE EXAMENES - ACME SCHOOL
+// ============================================================================
+// CAMBIOS REALIZADOS (Función del Grupo 1 - Registro de Estudiantes):
+// 1. NUEVO: Módulo de gestión de estudiantes (CRUD completo)
+// 2. NUEVO: Verificación de estudiante antes de presentar examen
+// 3. NUEVO: Los estudiantes deben estar pre-registrados para acceder
+// 4. MODIFICADO: El registro de examen ya NO pide nombre completo
+// ============================================================================
+
+const llaves = {
+  examenes: "acme_exams",
+  examenElegido: "acme_selected_exam",
+  estudianteActual: "acme_current_student",
+  resultadoActual: "acme_current_result",
+  resultados: "acme_results",
+  usuarios: "acme_users",
+  // ============================================================================
+  // NUEVO: Llave para almacenar estudiantes en localStorage
+  // Antes no existía este módulo - los estudiantes se registraban libremente
+  // Ahora deben ser creados por administrativos/docentes
+  // ============================================================================
+  estudiantes: "acme_students",
+  sesion: "acme_session"
+};
+
+const examenesDePrueba = [
+  {
+    id: "JS-101",
+    code: "JS-101",
+    title: "Fundamentos de JavaScript",
+    timeLimit: 10,
+    approvalPercentage: 70,
+    description: "Evalua conceptos basicos de variables, funciones, arreglos y DOM.",
+    questions: [
+      {
+        id: "q1",
+        text: "Que palabra se usa para declarar una constante?",
+        answers: [
+          { id: "q1-a1", text: "const", correct: true },
+          { id: "q1-a2", text: "var", correct: false },
+          { id: "q1-a3", text: "let", correct: false }
+        ]
+      },
+      {
+        id: "q2",
+        text: "Que metodo permite recorrer un arreglo sin crear uno nuevo?",
+        answers: [
+          { id: "q2-a1", text: "forEach", correct: true },
+          { id: "q2-a2", text: "map", correct: false },
+          { id: "q2-a3", text: "filter", correct: false }
+        ]
+      },
+      {
+        id: "q3",
+        text: "Que API del navegador guarda datos persistentes simples?",
+        answers: [
+          { id: "q3-a1", text: "localStorage", correct: true },
+          { id: "q3-a2", text: "fetch", correct: false },
+          { id: "q3-a3", text: "documentQuery", correct: false }
+        ]
+      }
+    ]
+  }
+];
+
+const usuariosDePrueba = [
+  {
+    id: "100000001",
+    fullName: "Administrador Acme",
+    email: "admin@acme.edu",
+    phone: "3001234567",
+    role: "Administrativo",
+    password: "Admin1234"
+  }
+];
+
+// ============================================================================
+// NUEVO: Datos de prueba para estudiantes
+// Antes no existían - ahora se crean automáticamente si no hay estudiantes
+// Estos estudiantes pueden ser usados para probar el flujo de presentación
+// ============================================================================
+const estudiantesDePrueba = [
+  {
+    id: "100000002",
+    fullName: "Estudiante Demo",
+    email: "estudiante@acme.edu",
+    gender: "",
+    birthDate: "2005-06-15"
+  }
+];
+
+let preguntasDelFormulario = [];
+
+function obtenerNumero(valor, valorPorDefecto) {
+  if (valor === undefined || valor === null || valor === "") return valorPorDefecto;
+
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : valorPorDefecto;
+}
+
+function normalizarUsuario(usuario, indice = 0) {
+  return {
+    id: String(usuario.id || usuario.identificacion || `usuario-${indice + 1}`),
+    fullName: usuario.fullName || usuario.nombre || "Usuario sin nombre",
+    email: usuario.email || "",
+    phone: usuario.phone || usuario.telefono || "",
+    role: usuario.role || usuario.cargo || "Docente",
+    password: usuario.password || usuario.contrasena || "Usuario123"
+  };
+}
+
+// ============================================================================
+// NUEVO: Función para normalizar datos de estudiantes
+// Similar a normalizarUsuario() pero para el nuevo módulo de estudiantes
+// Asegura que todos los campos tengan un valor por defecto válido
+// ============================================================================
+function normalizarEstudiante(estudiante, indice = 0) {
+  return {
+    id: String(estudiante.id || estudiante.identificacion || `estudiante-${indice + 1}`),
+    fullName: estudiante.fullName || estudiante.nombre || estudiante.nombreCompleto || "Estudiante sin nombre",
+    email: estudiante.email || estudiante.correo || "",
+    gender: estudiante.gender || estudiante.genero || "",
+    birthDate: estudiante.birthDate || estudiante.fechaNacimiento || ""
+  };
+}
+
+function normalizarExamen(examen, indice = 0) {
+  const codigo = examen.code || examen.codigo || `EX-${indice + 1}`;
+  const preguntas = examen.questions || examen.preguntas || [];
+
+  return {
+    id: String(examen.id || codigo),
+    code: String(codigo),
+    title: examen.title || examen.titulo || "Examen sin titulo",
+    timeLimit: obtenerNumero(examen.timeLimit ?? examen.tiempo, 10),
+    approvalPercentage: obtenerNumero(examen.approvalPercentage ?? examen.aprobacion, 70),
+    description: examen.description || examen.descripcion || "Examen creado desde el modulo de gestion.",
+    createdBy: examen.createdBy || examen.creadorId || "",
+    creatorName: examen.creatorName || examen.creadorNombre || "Sin creador asignado",
+    questions: preguntas.map((pregunta, indicePregunta) => {
+      const respuestas = pregunta.answers || pregunta.respuestas || [];
+
+      return {
+        id: String(pregunta.id || `q${indicePregunta + 1}`),
+        text: pregunta.text || pregunta.texto || `Pregunta ${indicePregunta + 1}`,
+        answers: respuestas.map((respuesta, indiceRespuesta) => ({
+          id: String(respuesta.id || `q${indicePregunta + 1}-a${indiceRespuesta + 1}`),
+          text: respuesta.text || respuesta.texto || `Respuesta ${indiceRespuesta + 1}`,
+          correct: Boolean(respuesta.correct || respuesta.correcta || respuesta.esCorrecta)
+        }))
+      };
+    })
+  };
+}
+
+function unirPorId(listaBase, listaNueva) {
+  const mapa = new Map();
+
+  [...listaBase, ...listaNueva].forEach((item) => {
+    mapa.set(String(item.id), item);
+  });
+
+  return Array.from(mapa.values());
+}
+
+// ============================================================================
+// MODIFICADO: Función de migración de datos anteriores
+// AHORA incluye migración de estudiantes (llave antigua "estudiantes" → nueva "acme_students")
+// ============================================================================
+function migrarDatosAnteriores() {
+  const usuariosAntiguos = JSON.parse(localStorage.getItem("usuarios") || "[]").map(normalizarUsuario);
+  // NUEVO: Migrar estudiantes desde llave antigua "estudiantes" si existen
+  const estudiantesAntiguos = JSON.parse(localStorage.getItem("estudiantes") || "[]").map(normalizarEstudiante);
+  const examenesAntiguos = JSON.parse(localStorage.getItem("examenes") || "[]").map(normalizarExamen);
+  const usuariosActuales = JSON.parse(localStorage.getItem(llaves.usuarios) || "[]").map(normalizarUsuario);
+  // NUEVO: Leer estudiantes actuales desde la nueva llave "acme_students"
+  const estudiantesActuales = JSON.parse(localStorage.getItem(llaves.estudiantes) || "[]").map(normalizarEstudiante);
+  const examenesActuales = JSON.parse(localStorage.getItem(llaves.examenes) || "[]").map(normalizarExamen);
+  const usuariosUnidos = unirPorId(usuariosActuales, usuariosAntiguos);
+  // NUEVO: Unir estudiantes actuales con antiguos (sin duplicados)
+  const estudiantesUnidos = unirPorId(estudiantesActuales, estudiantesAntiguos);
+  const examenesUnidos = unirPorId(examenesActuales, examenesAntiguos);
+
+  if (usuariosUnidos.length) {
+    localStorage.setItem(llaves.usuarios, JSON.stringify(usuariosUnidos));
+  }
+
+  // NUEVO: Guardar estudiantes unificados en la nueva llave
+  if (estudiantesUnidos.length) {
+    localStorage.setItem(llaves.estudiantes, JSON.stringify(estudiantesUnidos));
+  }
+
+  if (examenesUnidos.length) {
+    localStorage.setItem(llaves.examenes, JSON.stringify(examenesUnidos));
+  }
+
+  if (!sessionStorage.getItem(llaves.sesion) && localStorage.getItem("isLoggedIn") === "true") {
+    const email = localStorage.getItem("userEmail");
+    const usuario = usuariosUnidos.find((item) => item.email === email);
+
+    if (usuario) {
+      guardarSesion(usuario);
+    }
+  }
+}
+
+// ============================================================================
+// MODIFICADO: Crear datos iniciales
+// AHORA también crea estudiantes de prueba si no existen
+// ============================================================================
+function crearDatosIniciales() {
+  migrarDatosAnteriores();
+
+  if (!localStorage.getItem(llaves.examenes)) {
+    localStorage.setItem(llaves.examenes, JSON.stringify(examenesDePrueba));
+  }
+
+  // NUEVO: Crear estudiantes de prueba si no hay ninguno registrado
+  // Esto permite probar el flujo de presentación de examen inmediatamente
+  if (!localStorage.getItem(llaves.estudiantes)) {
+    localStorage.setItem(llaves.estudiantes, JSON.stringify(estudiantesDePrueba));
+  }
+
+  const usuariosGuardados = JSON.parse(localStorage.getItem(llaves.usuarios) || "[]").map(normalizarUsuario);
+  const tieneAdministrador = usuariosGuardados.some((usuario) => usuario.role === "Administrativo");
+
+  if (!tieneAdministrador) {
+    localStorage.setItem(llaves.usuarios, JSON.stringify(unirPorId(usuariosGuardados, usuariosDePrueba)));
+  }
+}
+
+function obtenerExamenes() {
+  crearDatosIniciales();
+  return (JSON.parse(localStorage.getItem(llaves.examenes)) || []).map(normalizarExamen);
+}
+
+function guardarExamenes(examenes) {
+  localStorage.setItem(llaves.examenes, JSON.stringify(examenes));
+}
+
+function obtenerUsuarios() {
+  crearDatosIniciales();
+  return (JSON.parse(localStorage.getItem(llaves.usuarios)) || "[]").map(normalizarUsuario);
+}
+
+function guardarUsuarios(usuarios) {
+  localStorage.setItem(llaves.usuarios, JSON.stringify(usuarios));
+}
+
+// ============================================================================
+// NUEVO: Funciones para obtener y guardar estudiantes
+// Similar a obtenerUsuarios()/guardarUsuarios() pero para el nuevo módulo
+// ============================================================================
+function obtenerEstudiantes() {
+  crearDatosIniciales();
+  return (JSON.parse(localStorage.getItem(llaves.estudiantes)) || "[]").map(normalizarEstudiante);
+}
+
+function guardarEstudiantes(estudiantes) {
+  localStorage.setItem(llaves.estudiantes, JSON.stringify(estudiantes));
+}
+
+function obtenerSesion() {
+  return JSON.parse(sessionStorage.getItem(llaves.sesion) || "null");
+}
+
+function guardarSesion(usuario) {
+  sessionStorage.setItem(llaves.sesion, JSON.stringify({
+    id: usuario.id,
+    fullName: usuario.fullName,
+    email: usuario.email,
+    role: usuario.role
+  }));
+}
+
+function cerrarSesion() {
+  sessionStorage.removeItem(llaves.sesion);
+  window.location.href = "login.html";
+}
+
+// ============================================================================
+// MODIFICADO: Protección de vistas privadas
+// AHORA incluye "estudiantes.html" como vista privada protegida
+// Antes solo protegía: usuarios.html y examenes.html
+// ============================================================================
+function protegerVistaPrivada() {
+  const pagina = location.pathname.split("/").pop();
+  const esPrivada = pagina === "usuarios.html" || pagina === "estudiantes.html" || pagina === "examenes.html";
+
+  if (esPrivada && !obtenerSesion()) {
+    window.location.href = "login.html";
+  }
+}
+
+function obtenerExamenElegido() {
+  const idExamen = sessionStorage.getItem(llaves.examenElegido);
+  const examenes = obtenerExamenes();
+  return examenes.find((examen) => examen.id === idExamen) || examenes[0];
+}
+
+function limpiarTexto(texto) {
+  return String(texto ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function convertirTiempo(segundosTotales) {
+  const minutos = Math.floor(segundosTotales / 60).toString().padStart(2, "0");
+  const segundos = (segundosTotales % 60).toString().padStart(2, "0");
+  return `${minutos}:${segundos}`;
+}
+
+function crearId(prefijo) {
+  return `${prefijo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+}
+
+function iniciarEventosGlobales() {
+  document.querySelectorAll("[data-cerrar-sesion]").forEach((boton) => {
+    boton.addEventListener("click", cerrarSesion);
+  });
+}
+
+function iniciarLogin() {
+  const formulario = document.querySelector("#formularioLogin");
+  if (!formulario) return;
+
+  const mensaje = document.querySelector("#mensajeLogin");
+
+  formulario.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+
+    if (!formulario.checkValidity()) {
+      formulario.reportValidity();
+      return;
+    }
+
+    const email = formulario.querySelector("#email").value.trim().toLowerCase();
+    const password = formulario.querySelector("#password").value;
+    const usuario = obtenerUsuarios().find((item) => item.email.toLowerCase() === email && item.password === password);
+
+    if (!usuario) {
+      mensaje.textContent = "Correo o contrasena incorrectos.";
+      return;
+    }
+
+    guardarSesion(usuario);
+    window.location.href = "usuarios.html";
+  });
+}
+
+function iniciarUsuarios() {
+  const formulario = document.querySelector("#formularioUsuario");
+  const tabla = document.querySelector("#tablaUsuarios");
+  if (!formulario || !tabla) return;
+
+  const campoEditando = formulario.querySelector("#usuarioEditando");
+
+  function limpiarFormulario() {
+    formulario.reset();
+    campoEditando.value = "";
+    formulario.querySelector("button[type='submit']").textContent = "Crear usuario";
+  }
+
+  function pintarUsuarios() {
+    const usuarios = obtenerUsuarios();
+    const contador = tabla.closest(".table-panel").querySelector(".panel-title-row span");
+
+    contador.textContent = `${usuarios.length} registro${usuarios.length === 1 ? "" : "s"}`;
+
+    if (!usuarios.length) {
+      tabla.innerHTML = `<tr><td colspan="5"><div class="empty-state">No hay usuarios registrados.</div></td></tr>`;
+      return;
+    }
+
+    tabla.innerHTML = usuarios.map((usuario) => `
+      <tr>
+        <td>${limpiarTexto(usuario.id)}</td>
+        <td>${limpiarTexto(usuario.fullName)}</td>
+        <td>${limpiarTexto(usuario.email)}</td>
+        <td><span class="pill">${limpiarTexto(usuario.role)}</span></td>
+        <td>
+          <button class="plain-button" type="button" data-editar-usuario="${limpiarTexto(usuario.id)}">Editar</button>
+          <button class="plain-button" type="button" data-eliminar-usuario="${limpiarTexto(usuario.id)}">Eliminar</button>
+        </td>
+      </tr>
+    `).join("");
+
+    tabla.querySelectorAll("[data-editar-usuario]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const usuario = obtenerUsuarios().find((item) => item.id === boton.dataset.editarUsuario);
+        if (!usuario) return;
+
+        campoEditando.value = usuario.id;
+        formulario.querySelector("#userId").value = usuario.id;
+        formulario.querySelector("#fullName").value = usuario.fullName;
+        formulario.querySelector("#userEmail").value = usuario.email;
+        formulario.querySelector("#phone").value = usuario.phone;
+        formulario.querySelector("#role").value = usuario.role;
+        formulario.querySelector("#userPassword").value = usuario.password;
+        formulario.querySelector("button[type='submit']").textContent = "Actualizar usuario";
+      });
+    });
+
+    tabla.querySelectorAll("[data-eliminar-usuario]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const usuarios = obtenerUsuarios();
+        const usuarioAEliminar = usuarios.find((usuario) => usuario.id === boton.dataset.eliminarUsuario);
+        const cantidadAdministradores = usuarios.filter((usuario) => usuario.role === "Administrativo").length;
+
+        if (usuarioAEliminar?.role === "Administrativo" && cantidadAdministradores === 1) {
+          alert("No se puede eliminar el ultimo administrador porque se bloquearia el acceso privado.");
+          return;
+        }
+
+        const usuariosFiltrados = usuarios.filter((usuario) => usuario.id !== boton.dataset.eliminarUsuario);
+        guardarUsuarios(usuariosFiltrados);
+        pintarUsuarios();
+      });
+    });
+  }
+
+  formulario.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+
+    if (!formulario.checkValidity()) {
+      formulario.reportValidity();
+      return;
+    }
+
+    const usuario = {
+      id: formulario.querySelector("#userId").value.trim(),
+      fullName: formulario.querySelector("#fullName").value.trim(),
+      email: formulario.querySelector("#userEmail").value.trim(),
+      phone: formulario.querySelector("#phone").value.trim(),
+      role: formulario.querySelector("#role").value,
+      password: formulario.querySelector("#userPassword").value
+    };
+    const usuarios = obtenerUsuarios();
+    const idOriginal = campoEditando.value;
+    const existeOtro = usuarios.some((item) => item.id === usuario.id && item.id !== idOriginal);
+    const usuarioOriginal = usuarios.find((item) => item.id === idOriginal);
+    const cantidadAdministradores = usuarios.filter((item) => item.role === "Administrativo").length;
+
+    if (existeOtro) {
+      formulario.querySelector("#userId").setCustomValidity("Ya existe un usuario con esta identificacion.");
+      formulario.reportValidity();
+      formulario.querySelector("#userId").setCustomValidity("");
+      return;
+    }
+
+    if (usuarioOriginal?.role === "Administrativo" && usuario.role !== "Administrativo" && cantidadAdministradores === 1) {
+      alert("Debe existir al menos un usuario administrativo para iniciar sesion.");
+      return;
+    }
+
+    const nuevosUsuarios = idOriginal
+      ? usuarios.map((item) => item.id === idOriginal ? usuario : item)
+      : [...usuarios, usuario];
+
+    guardarUsuarios(nuevosUsuarios);
+    limpiarFormulario();
+    pintarUsuarios();
+  });
+
+  formulario.addEventListener("reset", () => {
+    setTimeout(() => {
+      campoEditando.value = "";
+      formulario.querySelector("button[type='submit']").textContent = "Crear usuario";
+    }, 0);
+  });
+
+  pintarUsuarios();
+}
+
+// ============================================================================
+// NUEVO: Función iniciarEstudiantes() - CRUD completo de estudiantes
+// Similar a iniciarUsuarios() pero adaptada para el modelo de estudiantes
+// Permite: Crear, Leer, Actualizar y Eliminar estudiantes
+// ============================================================================
+function iniciarEstudiantes() {
+  const formulario = document.querySelector("#formularioEstudiante");
+  const tabla = document.querySelector("#tablaEstudiantes");
+  if (!formulario || !tabla) return;
+
+  const campoEditando = formulario.querySelector("#estudianteEditando");
+  const campoFecha = formulario.querySelector("#studentBirthDate");
+  const mensaje = formulario.querySelector("#mensajeEstudiante");
+  // NUEVO: Limitar fecha máxima a hoy (no se pueden registrar estudiantes del futuro)
+  const hoyLocal = new Date();
+  hoyLocal.setMinutes(hoyLocal.getMinutes() - hoyLocal.getTimezoneOffset());
+  campoFecha.max = hoyLocal.toISOString().slice(0, 10);
+
+  // NUEVO: Helper para mostrar mensajes de error o éxito
+  function mostrarMensaje(texto, esError = false) {
+    mensaje.textContent = texto;
+    mensaje.classList.toggle("error-message", esError);
+  }
+
+  function limpiarFormulario() {
+    formulario.reset();
+    campoEditando.value = "";
+    formulario.querySelector("button[type='submit']").textContent = "Crear estudiante";
+    mostrarMensaje("");
+  }
+
+  // NUEVO: Formatear fecha de YYYY-MM-DD a DD/MM/YYYY para mostrar
+  function formatearFecha(fecha) {
+    if (!fecha) return "No registrada";
+    const [anio, mes, dia] = fecha.split("-");
+    return `${dia}/${mes}/${anio}`;
+  }
+
+  function pintarEstudiantes() {
+    const estudiantes = obtenerEstudiantes();
+    const contador = tabla.closest(".table-panel").querySelector(".panel-title-row span");
+    contador.textContent = `${estudiantes.length} registro${estudiantes.length === 1 ? "" : "s"}`;
+
+    if (!estudiantes.length) {
+      tabla.innerHTML = `<tr><td colspan="6"><div class="empty-state">No hay estudiantes registrados.</div></td></tr>`;
+      return;
+    }
+
+    tabla.innerHTML = estudiantes.map((estudiante) => `
+      <tr>
+        <td>${limpiarTexto(estudiante.id)}</td>
+        <td>${limpiarTexto(estudiante.fullName)}</td>
+        <td>${limpiarTexto(estudiante.email)}</td>
+        <td>${estudiante.gender ? `<span class="pill">${limpiarTexto(estudiante.gender)}</span>` : "No indicado"}</td>
+        <td>${limpiarTexto(formatearFecha(estudiante.birthDate))}</td>
+        <td class="table-actions">
+          <button class="plain-button" type="button" data-editar-estudiante="${limpiarTexto(estudiante.id)}">Editar</button>
+          <button class="plain-button danger-button" type="button" data-eliminar-estudiante="${limpiarTexto(estudiante.id)}">Eliminar</button>
+        </td>
+      </tr>
+    `).join("");
+
+    tabla.querySelectorAll("[data-editar-estudiante]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const estudiante = obtenerEstudiantes().find((item) => item.id === boton.dataset.editarEstudiante);
+        if (!estudiante) return;
+
+        campoEditando.value = estudiante.id;
+        formulario.querySelector("#studentId").value = estudiante.id;
+        formulario.querySelector("#studentFullName").value = estudiante.fullName;
+        formulario.querySelector("#studentEmail").value = estudiante.email;
+        formulario.querySelector("#studentGender").value = estudiante.gender;
+        campoFecha.value = estudiante.birthDate;
+        formulario.querySelector("button[type='submit']").textContent = "Actualizar estudiante";
+        mostrarMensaje("Editando el registro seleccionado.");
+        formulario.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    tabla.querySelectorAll("[data-eliminar-estudiante]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const estudiante = obtenerEstudiantes().find((item) => item.id === boton.dataset.eliminarEstudiante);
+        if (!estudiante) return;
+
+        const confirmado = window.confirm(`¿Eliminar a ${estudiante.fullName} del registro de estudiantes?`);
+        if (!confirmado) return;
+
+        guardarEstudiantes(obtenerEstudiantes().filter((item) => item.id !== estudiante.id));
+        if (campoEditando.value === estudiante.id) limpiarFormulario();
+        pintarEstudiantes();
+      });
+    });
+  }
+
+  formulario.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    mostrarMensaje("");
+
+    if (!formulario.checkValidity()) {
+      formulario.reportValidity();
+      return;
+    }
+
+    const estudiante = {
+      id: formulario.querySelector("#studentId").value.trim(),
+      fullName: formulario.querySelector("#studentFullName").value.trim().replace(/\s+/g, " "),
+      email: formulario.querySelector("#studentEmail").value.trim().toLowerCase(),
+      gender: formulario.querySelector("#studentGender").value,
+      birthDate: campoFecha.value
+    };
+    const estudiantes = obtenerEstudiantes();
+    const idOriginal = campoEditando.value;
+    // NUEVO: Validar que no exista otra identificación igual (excepto si es la misma en edición)
+    const identificacionDuplicada = estudiantes.some((item) => item.id === estudiante.id && item.id !== idOriginal);
+    // NUEVO: Validar que no exista otro email igual (excepto si es el mismo en edición)
+    const emailDuplicado = estudiantes.some((item) => item.email.toLowerCase() === estudiante.email && item.id !== idOriginal);
+
+    if (identificacionDuplicada) {
+      mostrarMensaje("Ya existe un estudiante con esta identificación.", true);
+      formulario.querySelector("#studentId").focus();
+      return;
+    }
+
+    if (emailDuplicado) {
+      mostrarMensaje("Ya existe un estudiante con este email.", true);
+      formulario.querySelector("#studentEmail").focus();
+      return;
+    }
+
+    const nuevosEstudiantes = idOriginal
+      ? estudiantes.map((item) => item.id === idOriginal ? estudiante : item)
+      : [...estudiantes, estudiante];
+
+    guardarEstudiantes(nuevosEstudiantes);
+    limpiarFormulario();
+    pintarEstudiantes();
+  });
+
+  formulario.addEventListener("reset", () => {
+    setTimeout(() => {
+      campoEditando.value = "";
+      formulario.querySelector("button[type='submit']").textContent = "Crear estudiante";
+      mostrarMensaje("");
+    }, 0);
+  });
+
+  pintarEstudiantes();
+}
+
+function crearPreguntaVacia() {
+  return {
+    id: crearId("q"),
+    text: "",
+    answers: [
+      { id: crearId("a"), text: "", correct: true },
+      { id: crearId("a"), text: "", correct: false }
+    ]
+  };
+}
+
+function iniciarExamenes() {
+  const formulario = document.querySelector("#formularioExamen");
+  const contenedorPreguntas = document.querySelector("#contenedorPreguntas");
+  const tabla = document.querySelector("#tablaExamenes");
+  const botonAgregarPregunta = document.querySelector("#agregarPregunta");
+  if (!formulario || !contenedorPreguntas || !tabla || !botonAgregarPregunta) return;
+
+  const campoEditando = formulario.querySelector("#examenEditando");
+
+  function limpiarFormulario() {
+    formulario.reset();
+    campoEditando.value = "";
+    preguntasDelFormulario = [crearPreguntaVacia()];
+    formulario.querySelector("button[type='submit']").textContent = "Guardar examen";
+    pintarPreguntas();
+  }
+
+  function pintarPreguntas() {
+    contenedorPreguntas.innerHTML = preguntasDelFormulario.map((pregunta, indicePregunta) => `
+      <div class="question-editor" data-pregunta="${indicePregunta}">
+        <label for="pregunta_${indicePregunta}">Pregunta ${indicePregunta + 1}</label>
+        <input id="pregunta_${indicePregunta}" type="text" minlength="8" maxlength="180" value="${limpiarTexto(pregunta.text)}" data-texto-pregunta="${indicePregunta}" required>
+
+        ${pregunta.answers.map((respuesta, indiceRespuesta) => `
+          <label class="answer-row">
+            <input type="radio" name="correcta_${indicePregunta}" data-respuesta-correcta="${indicePregunta}:${indiceRespuesta}" ${respuesta.correct ? "checked" : ""} required>
+            <input type="text" placeholder="Descripcion de la respuesta" minlength="2" maxlength="120" value="${limpiarTexto(respuesta.text)}" data-texto-respuesta="${indicePregunta}:${indiceRespuesta}" required>
+            <button class="plain-button" type="button" data-quitar-respuesta="${indicePregunta}:${indiceRespuesta}">Quitar</button>
+          </label>
+        `).join("")}
+
+        <div class="question-actions">
+          <button class="secondary-button" type="button" data-agregar-respuesta="${indicePregunta}">Agregar respuesta</button>
+          <button class="plain-button" type="button" data-quitar-pregunta="${indicePregunta}">Quitar pregunta</button>
+        </div>
+      </div>
+    `).join("");
+
+    contenedorPreguntas.querySelectorAll("[data-texto-pregunta]").forEach((campo) => {
+      campo.addEventListener("input", () => {
+        preguntasDelFormulario[Number(campo.dataset.textoPregunta)].text = campo.value;
+      });
+    });
+
+    contenedorPreguntas.querySelectorAll("[data-texto-respuesta]").forEach((campo) => {
+      campo.addEventListener("input", () => {
+        const [indicePregunta, indiceRespuesta] = campo.dataset.textoRespuesta.split(":").map(Number);
+        preguntasDelFormulario[indicePregunta].answers[indiceRespuesta].text = campo.value;
+      });
+    });
+
+    contenedorPreguntas.querySelectorAll("[data-respuesta-correcta]").forEach((campo) => {
+      campo.addEventListener("change", () => {
+        const [indicePregunta, indiceRespuesta] = campo.dataset.respuestaCorrecta.split(":").map(Number);
+        preguntasDelFormulario[indicePregunta].answers = preguntasDelFormulario[indicePregunta].answers.map((respuesta, index) => ({
+          ...respuesta,
+          correct: index === indiceRespuesta
+        }));
+        pintarPreguntas();
+      });
+    });
+
+    contenedorPreguntas.querySelectorAll("[data-agregar-respuesta]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const indicePregunta = Number(boton.dataset.agregarRespuesta);
+        preguntasDelFormulario[indicePregunta].answers.push({ id: crearId("a"), text: "", correct: false });
+        pintarPreguntas();
+      });
+    });
+
+    contenedorPreguntas.querySelectorAll("[data-quitar-respuesta]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const [indicePregunta, indiceRespuesta] = boton.dataset.quitarRespuesta.split(":").map(Number);
+        const respuestas = preguntasDelFormulario[indicePregunta].answers;
+        if (respuestas.length <= 2) return;
+        respuestas.splice(indiceRespuesta, 1);
+        if (!respuestas.some((respuesta) => respuesta.correct)) respuestas[0].correct = true;
+        pintarPreguntas();
+      });
+    });
+
+    contenedorPreguntas.querySelectorAll("[data-quitar-pregunta]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        if (preguntasDelFormulario.length <= 1) return;
+        preguntasDelFormulario.splice(Number(boton.dataset.quitarPregunta), 1);
+        pintarPreguntas();
+      });
+    });
+  }
+
+  function pintarExamenes() {
+    const sesion = obtenerSesion();
+    const examenes = obtenerExamenes().filter((examen) => {
+      return !examen.createdBy || sesion?.role === "Administrativo" || examen.createdBy === sesion?.id;
+    });
+    const contador = tabla.closest(".table-panel").querySelector(".panel-title-row span");
+
+    contador.textContent = `${examenes.length} registro${examenes.length === 1 ? "" : "s"}`;
+
+    if (!examenes.length) {
+      tabla.innerHTML = `<tr><td colspan="7"><div class="empty-state">No hay examenes registrados.</div></td></tr>`;
+      return;
+    }
+
+    tabla.innerHTML = examenes.map((examen) => `
+      <tr>
+        <td>${limpiarTexto(examen.code)}</td>
+        <td>${limpiarTexto(examen.title)}</td>
+        <td>${examen.timeLimit} min</td>
+        <td>${examen.approvalPercentage}%</td>
+        <td>${examen.questions.length}</td>
+        <td>${limpiarTexto(examen.creatorName)}</td>
+        <td>
+          <button class="plain-button" type="button" data-editar-examen="${limpiarTexto(examen.id)}">Editar</button>
+          <button class="plain-button" type="button" data-eliminar-examen="${limpiarTexto(examen.id)}">Eliminar</button>
+        </td>
+      </tr>
+    `).join("");
+
+    tabla.querySelectorAll("[data-editar-examen]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const examen = obtenerExamenes().find((item) => item.id === boton.dataset.editarExamen);
+        if (!examen) return;
+
+        campoEditando.value = examen.id;
+        formulario.querySelector("#codigoExamen").value = examen.code;
+        formulario.querySelector("#tituloExamen").value = examen.title;
+        formulario.querySelector("#tiempoExamen").value = examen.timeLimit;
+        formulario.querySelector("#porcentajeExamen").value = examen.approvalPercentage;
+        formulario.querySelector("#descripcionExamen").value = examen.description;
+        preguntasDelFormulario = JSON.parse(JSON.stringify(examen.questions));
+        formulario.querySelector("button[type='submit']").textContent = "Actualizar examen";
+        pintarPreguntas();
+      });
+    });
+
+    tabla.querySelectorAll("[data-eliminar-examen]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const examenesFiltrados = obtenerExamenes().filter((examen) => examen.id !== boton.dataset.eliminarExamen);
+        guardarExamenes(examenesFiltrados);
+        pintarExamenes();
+      });
+    });
+  }
+
+  botonAgregarPregunta.addEventListener("click", () => {
+    preguntasDelFormulario.push(crearPreguntaVacia());
+    pintarPreguntas();
+  });
+
+  formulario.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+
+    if (!formulario.checkValidity()) {
+      formulario.reportValidity();
+      return;
+    }
+
+    const preguntasValidas = preguntasDelFormulario.every((pregunta) => {
+      const respuestasLlenas = pregunta.answers.filter((respuesta) => respuesta.text.trim()).length >= 2;
+      const correctas = pregunta.answers.filter((respuesta) => respuesta.correct).length;
+      return pregunta.text.trim().length >= 8 && respuestasLlenas && correctas === 1;
+    });
+
+    if (!preguntasValidas) {
+      alert("Cada pregunta debe tener texto, minimo dos respuestas y solo una correcta.");
+      return;
+    }
+
+    const idOriginal = campoEditando.value;
+    const codigo = formulario.querySelector("#codigoExamen").value.trim();
+    const sesion = obtenerSesion();
+    const examenes = obtenerExamenes();
+    const examenAnterior = examenes.find((item) => item.id === idOriginal);
+    const examen = {
+      id: idOriginal || codigo,
+      code: codigo,
+      title: formulario.querySelector("#tituloExamen").value.trim(),
+      timeLimit: Number(formulario.querySelector("#tiempoExamen").value),
+      approvalPercentage: Number(formulario.querySelector("#porcentajeExamen").value),
+      description: formulario.querySelector("#descripcionExamen").value.trim(),
+      createdBy: examenAnterior?.createdBy || sesion?.id || "",
+      creatorName: examenAnterior?.creatorName || sesion?.fullName || "Sin creador asignado",
+      questions: preguntasDelFormulario.map((pregunta, indicePregunta) => ({
+        id: pregunta.id || `q${indicePregunta + 1}`,
+        text: pregunta.text.trim(),
+        answers: pregunta.answers.map((respuesta, indiceRespuesta) => ({
+          id: respuesta.id || `${pregunta.id}-a${indiceRespuesta + 1}`,
+          text: respuesta.text.trim(),
+          correct: respuesta.correct
+        }))
+      }))
+    };
+    const existeOtro = examenes.some((item) => item.code === examen.code && item.id !== idOriginal);
+
+    if (existeOtro) {
+      formulario.querySelector("#codigoExamen").setCustomValidity("Ya existe un examen con este codigo.");
+      formulario.reportValidity();
+      formulario.querySelector("#codigoExamen").setCustomValidity("");
+      return;
+    }
+
+    const nuevosExamenes = idOriginal
+      ? examenes.map((item) => item.id === idOriginal ? examen : item)
+      : [...examenes, examen];
+
+    guardarExamenes(nuevosExamenes);
+    limpiarFormulario();
+    pintarExamenes();
+  });
+
+  formulario.addEventListener("reset", () => {
+    setTimeout(() => {
+      campoEditando.value = "";
+      preguntasDelFormulario = [crearPreguntaVacia()];
+      formulario.querySelector("button[type='submit']").textContent = "Guardar examen";
+      pintarPreguntas();
+    }, 0);
+  });
+
+  limpiarFormulario();
+  pintarExamenes();
+}
+
+class VistaCatalogoExamenes extends HTMLElement {
+  connectedCallback() {
+    const examenes = obtenerExamenes();
+
+    this.innerHTML = `
+      <div class="hero-card">
+        <span>Modulo publico</span>
+        <h1>Selecciona un examen disponible</h1>
+        <!-- CAMBIO: Texto actualizado para reflejar el nuevo flujo de verificación -->
+        <p>Elige una prueba, valida tu documento y responde dentro del tiempo establecido.</p>
+      </div>
+
+      <div class="exam-list">
+        ${examenes.map((examen) => `
+          <article class="exam-card">
+            <p class="code">${limpiarTexto(examen.code)}</p>
+            <h2>${limpiarTexto(examen.title)}</h2>
+            <p>${limpiarTexto(examen.description)}</p>
+            <div class="meta-row">
+              <span>${examen.timeLimit} min</span>
+              <span>${examen.approvalPercentage}% aprueba</span>
+              <span>${examen.questions.length} preguntas</span>
+            </div>
+            <button class="primary-button" type="button" data-examen="${limpiarTexto(examen.id)}">Presentar Examen</button>
+          </article>
+        `).join("")}
+      </div>
+    `;
+
+    this.querySelectorAll("[data-examen]").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        sessionStorage.setItem(llaves.examenElegido, boton.dataset.examen);
+        sessionStorage.removeItem(llaves.estudianteActual);
+        sessionStorage.removeItem(llaves.resultadoActual);
+        window.location.href = "registro.html";
+      });
+    });
+  }
+}
+
+// ============================================================================
+// MODIFICADO: VistaRegistroEstudiante - AHORA SOLO PIDE IDENTIFICACIÓN
+// ============================================================================
+// ANTES: Pedía identificación Y nombre completo manualmente
+// AHORA: Solo pide identificación y verifica contra el registro de estudiantes
+// Si el estudiante NO existe → muestra mensaje de error y bloquea acceso
+// Si el estudiante EXISTE → toma nombre/email del registro y permite continuar
+// ============================================================================
+class VistaRegistroEstudiante extends HTMLElement {
+  connectedCallback() {
+    const examen = obtenerExamenElegido();
+    sessionStorage.setItem(llaves.examenElegido, examen.id);
+
+    this.innerHTML = `
+      <form class="panel narrow-panel">
+        <p class="code">${limpiarTexto(examen.code)}</p>
+        <h1>${limpiarTexto(examen.title)}</h1>
+        <!-- CAMBIO: Texto actualizado - ya no pide nombre completo -->
+        <p>Ingresa tu documento para validar que estés registrado antes de iniciar.</p>
+
+        <!-- CAMBIO: Solo se pide identificación (antes también pedía nombre completo) -->
+        <label for="identificacion">Numero de identificacion</label>
+        <input id="identificacion" type="text" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" title="Ingresa solo numeros, entre 6 y 12 digitos." required>
+        <small class="field-help">Solo numeros, entre 6 y 12 digitos.</small>
+
+        <!-- NUEVO: Mensaje dinámico para mostrar error o éxito de verificación -->
+        <p class="form-message student-access-message" aria-live="polite"></p>
+
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Iniciar examen</button>
+          <a class="ghost-link" href="index.html">Volver</a>
+        </div>
+      </form>
+    `;
+
+    this.querySelector("form").addEventListener("submit", (evento) => {
+      evento.preventDefault();
+      const formulario = evento.currentTarget;
+
+      if (!formulario.checkValidity()) {
+        formulario.reportValidity();
+        return;
+      }
+
+      // ============================================================================
+      // NUEVO: Verificación de estudiante registrado
+      // Se busca en el registro de estudiantes (acme_students) por identificación
+      // ============================================================================
+      const identificacion = formulario.querySelector("#identificacion").value.trim();
+      const estudianteRegistrado = obtenerEstudiantes().find((item) => item.id === identificacion);
+      const mensaje = formulario.querySelector(".student-access-message");
+
+      // ============================================================================
+      // NUEVO: Si el estudiante NO está registrado → bloquear acceso
+      // ============================================================================
+      if (!estudianteRegistrado) {
+        mensaje.textContent = "No puedes realizar el examen porque no estás registrado. Comunícate con un docente o administrativo.";
+        mensaje.classList.add("error-message");
+        formulario.querySelector("#identificacion").focus();
+        return;
+      }
+
+      // ============================================================================
+      // NUEVO: Si el estudiante SÍ está registrado → usar sus datos del registro
+      // El nombre y email se toman automáticamente, no se piden manualmente
+      // ============================================================================
+      const estudiante = {
+        ...estudianteRegistrado,
+        examId: examen.id,
+        startedAt: new Date().toISOString()
+      };
+
+      sessionStorage.setItem(llaves.estudianteActual, JSON.stringify(estudiante));
+      window.location.href = "presentacion.html";
+    });
+  }
+}
+
+class VistaResolverExamen extends HTMLElement {
+  constructor() {
+    super();
+    this.respuestas = {};
+    this.segundosRestantes = 0;
+    this.reloj = null;
+  }
+
+  connectedCallback() {
+    this.examen = obtenerExamenElegido();
+    this.estudiante = JSON.parse(sessionStorage.getItem(llaves.estudianteActual) || "null");
+
+    if (!this.estudiante) {
+      window.location.href = "registro.html";
+      return;
+    }
+
+    this.segundosRestantes = this.examen.timeLimit * 60;
+    this.mostrarExamenCompleto();
+    this.iniciarReloj();
+  }
+
+  disconnectedCallback() {
+    clearInterval(this.reloj);
+  }
+
+  mostrarExamenCompleto() {
+    const cantidadRespondidas = Object.keys(this.respuestas).length;
+
+    this.innerHTML = `
+      <div class="exam-heading">
+        <div>
+          <p class="code">${limpiarTexto(this.examen.code)}</p>
+          <h1>${limpiarTexto(this.examen.title)}</h1>
+          <p>${this.examen.questions.length} preguntas - Aprueba con ${this.examen.approvalPercentage}% - Estudiante: ${limpiarTexto(this.estudiante.fullName)}</p>
+        </div>
+        <strong class="timer" data-reloj>${convertirTiempo(this.segundosRestantes)}</strong>
+      </div>
+
+      <div class="runner-stats">
+        <span>${this.examen.questions.length} preguntas</span>
+        <span>${cantidadRespondidas} respondidas</span>
+        <span>${this.examen.timeLimit} min limite</span>
+      </div>
+
+      <form class="questions-form">
+        ${this.examen.questions.map((pregunta, indicePregunta) => `
+          <fieldset class="question-card">
+            <legend>${indicePregunta + 1}. ${limpiarTexto(pregunta.text)}</legend>
+            ${pregunta.answers.map((respuesta) => `
+              <label>
+                <input type="radio" name="pregunta_${indicePregunta}" data-pregunta-id="${limpiarTexto(pregunta.id)}" value="${limpiarTexto(respuesta.id)}" ${this.respuestas[pregunta.id] === respuesta.id ? "checked" : ""}>
+                ${limpiarTexto(respuesta.text)}
+              </label>
+            `).join("")}
+          </fieldset>
+        `).join("")}
+
+        <div class="runner-actions">
+          <button class="primary-button finish-button" type="submit">Terminar examen</button>
+        </div>
+      </form>
+    `;
+
+    this.querySelectorAll("input[type='radio']").forEach((opcion) => {
+      opcion.addEventListener("change", () => {
+        const idPregunta = opcion.dataset.preguntaId;
+        this.respuestas[idPregunta] = opcion.value;
+        this.actualizarContadorRespondidas();
+      });
+    });
+
+    this.querySelector("form").addEventListener("submit", (evento) => {
+      evento.preventDefault();
+      this.terminarExamen();
+    });
+  }
+
+  actualizarContadorRespondidas() {
+    const estadisticas = this.querySelector(".runner-stats");
+
+    if (estadisticas) {
+      estadisticas.children[1].textContent = `${Object.keys(this.respuestas).length} respondidas`;
+    }
+  }
+
+  iniciarReloj() {
+    this.reloj = setInterval(() => {
+      this.segundosRestantes--;
+      const textoReloj = this.querySelector("[data-reloj]");
+
+      if (textoReloj) {
+        textoReloj.textContent = convertirTiempo(Math.max(this.segundosRestantes, 0));
+        textoReloj.classList.toggle("timer-danger", this.segundosRestantes <= 60);
+      }
+
+      if (this.segundosRestantes <= 0) {
+        this.terminarExamen(true);
+      }
+    }, 1000);
+  }
+
+  terminarExamen(tiempoAgotado = false) {
+    clearInterval(this.reloj);
+
+    this.querySelectorAll("input[type='radio']:checked").forEach((opcion) => {
+      this.respuestas[opcion.dataset.preguntaId] = opcion.value;
+    });
+
+    const totalPreguntas = this.examen.questions.length;
+    const detalle = this.examen.questions.map((pregunta) => {
+      const respuestaElegida = this.respuestas[pregunta.id];
+      const respuestaCorrecta = pregunta.answers.find((respuesta) => respuesta.correct);
+      const opcionElegida = pregunta.answers.find((respuesta) => respuesta.id === respuestaElegida);
+
+      return {
+        questionId: pregunta.id,
+        questionText: pregunta.text,
+        selectedAnswerId: respuestaElegida || "",
+        selectedAnswerText: opcionElegida?.text || "Sin responder",
+        correctAnswerId: respuestaCorrecta?.id || "",
+        correctAnswerText: respuestaCorrecta?.text || "Sin respuesta correcta",
+        isCorrect: respuestaElegida === respuestaCorrecta?.id
+      };
+    });
+    const respuestasCorrectas = detalle.filter((pregunta) => pregunta.isCorrect).length;
+    const porcentaje = totalPreguntas ? Math.round((respuestasCorrectas / totalPreguntas) * 100) : 0;
+    const aprobado = totalPreguntas > 0 && porcentaje >= this.examen.approvalPercentage;
+
+    const resultado = {
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      examId: this.examen.id,
+      examTitle: this.examen.title,
+      studentId: this.estudiante.id,
+      studentName: this.estudiante.fullName,
+      correct: respuestasCorrectas,
+      total: totalPreguntas,
+      percentage: porcentaje,
+      approved: aprobado,
+      timeExpired: tiempoAgotado,
+      answers: this.respuestas,
+      detail: detalle,
+      finishedAt: new Date().toISOString()
+    };
+
+    const resultadosGuardados = JSON.parse(localStorage.getItem(llaves.resultados) || "[]");
+    resultadosGuardados.push(resultado);
+    localStorage.setItem(llaves.resultados, JSON.stringify(resultadosGuardados));
+    sessionStorage.setItem(llaves.resultadoActual, JSON.stringify(resultado));
+    window.location.href = "resultado.html";
+  }
+}
+
+class VistaResultadoExamen extends HTMLElement {
+  connectedCallback() {
+    const resultado = JSON.parse(sessionStorage.getItem(llaves.resultadoActual) || "null");
+
+    if (!resultado) {
+      this.innerHTML = `
+        <article class="result-card">
+          <span>Resultado</span>
+          <strong>--</strong>
+          <p>No hay un resultado activo para mostrar.</p>
+          <a class="primary-button wide-button" href="index.html">Volver a examenes</a>
+        </article>
+      `;
+      return;
+    }
+
+    const detalle = resultado.detail || [];
+
+    this.innerHTML = `
+      <article class="result-card">
+        <span>Resultado</span>
+        <strong>${resultado.percentage}%</strong>
+        <p>${resultado.correct} de ${resultado.total} respuestas acertadas.</p>
+        <p class="result-meta">Estudiante: ${limpiarTexto(resultado.studentName)} - ID: ${limpiarTexto(resultado.studentId)}</p>
+        <div class="status ${resultado.approved ? "pass" : "fail"}">${resultado.approved ? "Examen aprobado" : "Examen no aprobado"}</div>
+        <div class="result-detail">
+          <h2>Revision de respuestas</h2>
+          ${detalle.map((pregunta, indice) => `
+            <div class="result-question ${pregunta.isCorrect ? "is-correct" : "is-wrong"}">
+              <h3>${indice + 1}. ${limpiarTexto(pregunta.questionText)}</h3>
+              <p><strong>Tu respuesta:</strong> ${limpiarTexto(pregunta.selectedAnswerText)}</p>
+              <p><strong>Respuesta correcta:</strong> ${limpiarTexto(pregunta.correctAnswerText)}</p>
+            </div>
+          `).join("")}
+        </div>
+        <a class="primary-button wide-button" href="index.html">Volver a examenes</a>
+      </article>
+    `;
+  }
+}
+
+// ============================================================================
+// INICIALIZACIÓN - AHORA INCLUYE iniciarEstudiantes()
+// ============================================================================
+crearDatosIniciales();
+protegerVistaPrivada();
+iniciarEventosGlobales();
+iniciarLogin();
+iniciarUsuarios();
+// NUEVO: Inicializar el módulo de estudiantes
+iniciarEstudiantes();
+iniciarExamenes();
+
+customElements.define("exam-hub-view", VistaCatalogoExamenes);
+customElements.define("student-register-view", VistaRegistroEstudiante);
+customElements.define("exam-runner-view", VistaResolverExamen);
+customElements.define("exam-result-view", VistaResultadoExamen);

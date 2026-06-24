@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme School | Registro</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">A</span>
+      <span>
+        <strong>Acme School</strong>
+        <small>Exams platform</small>
+      </span>
+    </a>
+
+    <nav class="main-nav" aria-label="Navegacion principal">
+      <a class="active" href="index.html">Resolver examen</a>
+      <a href="login.html">Login</a>
+    </nav>
+
+    <span class="session-label">Acceso publico</span>
+  </header>
+
+  <main class="view centered-view">
+    <!-- 
+      NOTA: Este Web Component fue MODIFICADO internamente en script.js
+      ANTES: Pedía identificación Y nombre completo
+      AHORA: Solo pide identificación y verifica si existe en el registro de estudiantes
+      Si no existe, muestra mensaje de error y bloquea el acceso
+    -->
+    <student-register-view></student-register-view>
+  </main>
+</body>
+</html>

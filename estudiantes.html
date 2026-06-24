@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme School | Estudiantes</title>
+  <!-- NUEVO: Vista privada para gestión de estudiantes -->
+  <!-- Solo usuarios autenticados (Administrativo/Docente) pueden acceder -->
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">A</span>
+      <span>
+        <strong>Acme School</strong>
+        <small>Exams platform</small>
+      </span>
+    </a>
+
+    <!-- NUEVO: Navegación actualizada con link a Estudiantes -->
+    <!-- Antes solo tenía: Resolver examen, Login -->
+    <!-- Ahora incluye: Resolver examen, Usuarios, Estudiantes, Examenes -->
+    <nav class="main-nav" aria-label="Navegación principal">
+      <a href="index.html">Resolver examen</a>
+      <a href="usuarios.html">Usuarios</a>
+      <!-- NUEVO: Link a la vista de gestión de estudiantes -->
+      <a class="active" href="estudiantes.html">Estudiantes</a>
+      <a href="examenes.html">Exámenes</a>
+    </nav>
+
+    <!-- NUEVO: Botón de cerrar sesión (antes no existía en esta vista) -->
+    <button class="session-label logout-button" type="button" data-cerrar-sesion>Cerrar sesión</button>
+  </header>
+
+  <main class="view management-view">
+    <div class="section-title">
+      <span>Administración</span>
+      <h1>Gestión de estudiantes</h1>
+      <!-- NUEVO: Descripción del propósito del módulo -->
+      <p>Crea, actualiza, elimina y consulta los estudiantes autorizados para presentar exámenes.</p>
+    </div>
+
+    <div class="split-layout">
+      <!-- NUEVO: Formulario de estudiante (estructura similar a usuarios pero con campos diferentes) -->
+      <form class="panel" id="formularioEstudiante">
+        <h2>Crear estudiante</h2>
+        <!-- NUEVO: Campo oculto para saber si se está editando un estudiante existente -->
+        <input id="estudianteEditando" type="hidden">
+
+        <!-- NUEVO: Campo número de identificación (obligatorio, 6-12 dígitos) -->
+        <label for="studentId">Número de identificación</label>
+        <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" title="Ingresa solo números, entre 6 y 12 dígitos." required>
+        <small class="field-help">Solo números, entre 6 y 12 dígitos.</small>
+
+        <!-- NUEVO: Campo nombre completo (obligatorio) -->
+        <label for="studentFullName">Nombre completo</label>
+        <input id="studentFullName" type="text" minlength="3" maxlength="80" pattern="[A-Za-zÁÉÍÓÚáéíóúÜüÑñ ]{3,80}" title="Ingresa nombres y apellidos usando solo letras y espacios." required>
+
+        <!-- NUEVO: Campo email (obligatorio) -->
+        <label for="studentEmail">Email</label>
+        <input id="studentEmail" type="email" maxlength="120" autocomplete="email" required>
+
+        <!-- NUEVO: Campo género (OPCIONAL) - no tiene atributo required -->
+        <label for="studentGender">Género <span class="optional-label">(opcional)</span></label>
+        <select id="studentGender">
+          <option value="">Prefiere no indicar</option>
+          <option value="Femenino">Femenino</option>
+          <option value="Masculino">Masculino</option>
+          <option value="No binario">No binario</option>
+          <option value="Otro">Otro</option>
+        </select>
+
+        <!-- NUEVO: Campo fecha de nacimiento (obligatorio) -->
+        <label for="studentBirthDate">Fecha de nacimiento</label>
+        <input id="studentBirthDate" type="date" required>
+
+        <!-- NUEVO: Mensaje de retroalimentación para errores/éxito -->
+        <p class="form-message" id="mensajeEstudiante" aria-live="polite"></p>
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Crear estudiante</button>
+          <button class="plain-button" type="reset">Limpiar</button>
+        </div>
+      </form>
+
+      <!-- NUEVO: Panel de tabla con estudiantes registrados -->
+      <article class="panel table-panel">
+        <div class="panel-title-row">
+          <h2>Estudiantes registrados</h2>
+          <span>0 registros</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <!-- NUEVO: Columnas específicas de estudiantes -->
+                <th>Identificación</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Género</th>
+                <th>Nacimiento</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaEstudiantes"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

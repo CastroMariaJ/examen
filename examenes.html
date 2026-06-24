@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme School | Examenes</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">A</span>
+      <span>
+        <strong>Acme School</strong>
+        <small>Exams platform</small>
+      </span>
+    </a>
+
+    <nav class="main-nav" aria-label="Navegacion principal">
+      <!-- CAMBIO: Navegación actualizada para incluir módulo de Estudiantes -->
+      <!-- ANTES: solo tenía 'Resolver examen', 'Usuarios', 'Examenes' -->
+      <!-- AHORA: incluye link a 'Estudiantes' entre Usuarios y Examenes -->
+      <a href="index.html">Resolver examen</a>
+      <a href="usuarios.html">Usuarios</a>
+      <!-- NUEVO: Link al módulo de gestión de estudiantes -->
+      <a href="estudiantes.html">Estudiantes</a>
+      <a class="active" href="examenes.html">Examenes</a>
+    </nav>
+
+    <button class="session-label logout-button" type="button" data-cerrar-sesion>Cerrar sesion</button>
+  </header>
+
+  <main class="view management-view">
+    <div class="section-title">
+      <span>Banco de pruebas</span>
+      <h1>Gestion de examenes</h1>
+      <p>Configura examenes, preguntas y respuestas. Cada pregunta admite una unica respuesta correcta.</p>
+    </div>
+
+    <div class="split-layout">
+      <form class="panel" id="formularioExamen">
+        <h2>Crear examen</h2>
+        <input id="examenEditando" type="hidden">
+        <div class="two-columns">
+          <label for="codigoExamen">Codigo<input id="codigoExamen" type="text" minlength="2" maxlength="20" placeholder="JS-101" required></label>
+          <label for="tituloExamen">Titulo<input id="tituloExamen" type="text" minlength="4" maxlength="80" required></label>
+          <label for="tiempoExamen">Tiempo en minutos<input id="tiempoExamen" type="number" min="1" max="240" step="1" required></label>
+          <label for="porcentajeExamen">Porcentaje de aprobacion<input id="porcentajeExamen" type="number" min="0" max="100" step="1" required></label>
+        </div>
+        <label for="descripcionExamen">Descripcion</label>
+        <textarea id="descripcionExamen" rows="4" maxlength="300"></textarea>
+
+        <div class="panel-title-row questions-title">
+          <h3>Preguntas</h3>
+          <button class="secondary-button" type="button" id="agregarPregunta">Agregar pregunta</button>
+        </div>
+
+        <div id="contenedorPreguntas"></div>
+
+        <button class="primary-button" type="submit">Guardar examen</button>
+      </form>
+
+      <article class="panel table-panel">
+        <div class="panel-title-row">
+          <h2>Examenes registrados</h2>
+          <span>1 registro</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Examen</th>
+                <th>Tiempo</th>
+                <th>Aprobacion</th>
+                <th>Preguntas</th>
+                <th>Creador</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaExamenes"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

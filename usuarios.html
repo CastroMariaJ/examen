@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme School | Usuarios</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">A</span>
+      <span>
+        <strong>Acme School</strong>
+        <small>Exams platform</small>
+      </span>
+    </a>
+
+    <nav class="main-nav" aria-label="Navegacion principal">
+      <!-- CAMBIO: Navegación actualizada para incluir módulo de Estudiantes -->
+      <!-- ANTES: solo tenía 'Resolver examen' y 'Login' -->
+      <!-- AHORA: incluye links a todas las vistas privadas -->
+      <a href="index.html">Resolver examen</a>
+      <a class="active" href="usuarios.html">Usuarios</a>
+      <!-- NUEVO: Link al módulo de gestión de estudiantes -->
+      <a href="estudiantes.html">Estudiantes</a>
+      <a href="examenes.html">Examenes</a>
+    </nav>
+
+    <button class="session-label logout-button" type="button" data-cerrar-sesion>Cerrar sesion</button>
+  </header>
+
+  <main class="view management-view">
+    <div class="section-title">
+      <span>Administracion</span>
+      <h1>Gestion de usuarios</h1>
+      <p>Crea, actualiza y elimina cuentas con acceso a los modulos privados.</p>
+    </div>
+
+    <div class="split-layout">
+      <form class="panel" id="formularioUsuario">
+        <h2>Crear usuario</h2>
+        <input id="usuarioEditando" type="hidden">
+        <label for="userId">Numero de identificacion</label>
+        <input id="userId" type="text" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" title="Ingresa solo numeros, entre 6 y 12 digitos." required>
+        <small class="field-help">Solo numeros, entre 6 y 12 digitos.</small>
+
+        <label for="fullName">Nombre completo</label>
+        <input id="fullName" type="text" minlength="3" maxlength="80" pattern="[A-Za-zÁÉÍÓÚáéíóúÑñ ]{3,80}" title="Ingresa nombre y apellido usando solo letras y espacios." required>
+        <small class="field-help">Debe incluir nombres y apellidos, sin numeros.</small>
+
+        <label for="userEmail">Email</label>
+        <input id="userEmail" type="email" autocomplete="email" required>
+
+        <label for="phone">Telefono</label>
+        <input id="phone" type="tel" inputmode="numeric" pattern="[0-9]{7,15}" minlength="7" maxlength="15" title="Ingresa solo numeros, entre 7 y 15 digitos." required>
+        <small class="field-help">Solo numeros, entre 7 y 15 digitos.</small>
+
+        <label for="role">Cargo</label>
+        <select id="role" required>
+          <option value="">Selecciona un cargo</option>
+          <option>Administrativo</option>
+          <option>Docente</option>
+        </select>
+
+        <label for="userPassword">Contrasena</label>
+        <input id="userPassword" type="password" minlength="8" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}" title="Minimo 8 caracteres, una mayuscula, una minuscula y un numero." autocomplete="new-password" required>
+        <small class="field-help">Minimo 8 caracteres, una mayuscula, una minuscula y un numero.</small>
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Crear usuario</button>
+          <button class="plain-button" type="reset">Limpiar</button>
+        </div>
+      </form>
+
+      <article class="panel table-panel">
+        <div class="panel-title-row">
+          <h2>Usuarios registrados</h2>
+          <span>1 registro</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Identificacion</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Cargo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+              <tbody id="tablaUsuarios">
+              </tbody>
+            </table>
+          </div>
+      </article>
+    </div>
+  </main>
+</body>
+</html>
