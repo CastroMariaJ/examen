@@ -18,9 +18,7 @@ Construir una plataforma web donde:
 
 - Los administradores o docentes puedan iniciar sesion.
 - Los usuarios autorizados puedan gestionar usuarios.
-<!-- ============================================================================
-     NUEVO: Objetivo agregado - Gestion de estudiantes
-     ============================================================================ -->
+
 - Los usuarios autorizados puedan gestionar estudiantes.
 - Los usuarios autorizados puedan crear examenes, preguntas y respuestas.
 - Los estudiantes puedan presentar examenes sin iniciar sesion.

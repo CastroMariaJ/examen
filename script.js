@@ -1,12 +1,4 @@
-// ============================================================================
-// PLATAFORMA DE EXAMENES - ACME SCHOOL
-// ============================================================================
-// CAMBIOS REALIZADOS (Función del Grupo 1 - Registro de Estudiantes):
-// 1. NUEVO: Módulo de gestión de estudiantes (CRUD completo)
-// 2. NUEVO: Verificación de estudiante antes de presentar examen
-// 3. NUEVO: Los estudiantes deben estar pre-registrados para acceder
-// 4. MODIFICADO: El registro de examen ya NO pide nombre completo
-// ============================================================================
+
 
 const llaves = {
   examenes: "acme_exams",
@@ -15,11 +7,6 @@ const llaves = {
   resultadoActual: "acme_current_result",
   resultados: "acme_results",
   usuarios: "acme_users",
-  // ============================================================================
-  // NUEVO: Llave para almacenar estudiantes en localStorage
-  // Antes no existía este módulo - los estudiantes se registraban libremente
-  // Ahora deben ser creados por administrativos/docentes
-  // ============================================================================
   estudiantes: "acme_students",
   sesion: "acme_session"
 };
@@ -75,11 +62,6 @@ const usuariosDePrueba = [
   }
 ];
 
-// ============================================================================
-// NUEVO: Datos de prueba para estudiantes
-// Antes no existían - ahora se crean automáticamente si no hay estudiantes
-// Estos estudiantes pueden ser usados para probar el flujo de presentación
-// ============================================================================
 const estudiantesDePrueba = [
   {
     id: "100000002",
@@ -92,12 +74,43 @@ const estudiantesDePrueba = [
 
 let preguntasDelFormulario = [];
 
+
 function obtenerNumero(valor, valorPorDefecto) {
   if (valor === undefined || valor === null || valor === "") return valorPorDefecto;
 
   const numero = Number(valor);
   return Number.isFinite(numero) ? numero : valorPorDefecto;
 }
+
+function limpiarTexto(texto) {
+  return String(texto ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function convertirTiempo(segundosTotales) {
+  const minutos = Math.floor(segundosTotales / 60).toString().padStart(2, "0");
+  const segundos = (segundosTotales % 60).toString().padStart(2, "0");
+  return `${minutos}:${segundos}`;
+}
+
+function crearId(prefijo) {
+  return `${prefijo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+}
+
+function unirPorId(listaBase, listaNueva) {
+  const mapa = new Map();
+
+  [...listaBase, ...listaNueva].forEach((item) => {
+    mapa.set(String(item.id), item);
+  });
+
+  return Array.from(mapa.values());
+}
+
 
 function normalizarUsuario(usuario, indice = 0) {
   return {
@@ -110,11 +123,6 @@ function normalizarUsuario(usuario, indice = 0) {
   };
 }
 
-// ============================================================================
-// NUEVO: Función para normalizar datos de estudiantes
-// Similar a normalizarUsuario() pero para el nuevo módulo de estudiantes
-// Asegura que todos los campos tengan un valor por defecto válido
-// ============================================================================
 function normalizarEstudiante(estudiante, indice = 0) {
   return {
     id: String(estudiante.id || estudiante.identificacion || `estudiante-${indice + 1}`),
@@ -154,31 +162,17 @@ function normalizarExamen(examen, indice = 0) {
   };
 }
 
-function unirPorId(listaBase, listaNueva) {
-  const mapa = new Map();
 
-  [...listaBase, ...listaNueva].forEach((item) => {
-    mapa.set(String(item.id), item);
-  });
-
-  return Array.from(mapa.values());
-}
-
-// ============================================================================
-// MODIFICADO: Función de migración de datos anteriores
-// AHORA incluye migración de estudiantes (llave antigua "estudiantes" → nueva "acme_students")
-// ============================================================================
 function migrarDatosAnteriores() {
   const usuariosAntiguos = JSON.parse(localStorage.getItem("usuarios") || "[]").map(normalizarUsuario);
-  // NUEVO: Migrar estudiantes desde llave antigua "estudiantes" si existen
   const estudiantesAntiguos = JSON.parse(localStorage.getItem("estudiantes") || "[]").map(normalizarEstudiante);
   const examenesAntiguos = JSON.parse(localStorage.getItem("examenes") || "[]").map(normalizarExamen);
+
   const usuariosActuales = JSON.parse(localStorage.getItem(llaves.usuarios) || "[]").map(normalizarUsuario);
-  // NUEVO: Leer estudiantes actuales desde la nueva llave "acme_students"
   const estudiantesActuales = JSON.parse(localStorage.getItem(llaves.estudiantes) || "[]").map(normalizarEstudiante);
   const examenesActuales = JSON.parse(localStorage.getItem(llaves.examenes) || "[]").map(normalizarExamen);
+
   const usuariosUnidos = unirPorId(usuariosActuales, usuariosAntiguos);
-  // NUEVO: Unir estudiantes actuales con antiguos (sin duplicados)
   const estudiantesUnidos = unirPorId(estudiantesActuales, estudiantesAntiguos);
   const examenesUnidos = unirPorId(examenesActuales, examenesAntiguos);
 
@@ -186,7 +180,6 @@ function migrarDatosAnteriores() {
     localStorage.setItem(llaves.usuarios, JSON.stringify(usuariosUnidos));
   }
 
-  // NUEVO: Guardar estudiantes unificados en la nueva llave
   if (estudiantesUnidos.length) {
     localStorage.setItem(llaves.estudiantes, JSON.stringify(estudiantesUnidos));
   }
@@ -205,10 +198,6 @@ function migrarDatosAnteriores() {
   }
 }
 
-// ============================================================================
-// MODIFICADO: Crear datos iniciales
-// AHORA también crea estudiantes de prueba si no existen
-// ============================================================================
 function crearDatosIniciales() {
   migrarDatosAnteriores();
 
@@ -216,8 +205,6 @@ function crearDatosIniciales() {
     localStorage.setItem(llaves.examenes, JSON.stringify(examenesDePrueba));
   }
 
-  // NUEVO: Crear estudiantes de prueba si no hay ninguno registrado
-  // Esto permite probar el flujo de presentación de examen inmediatamente
   if (!localStorage.getItem(llaves.estudiantes)) {
     localStorage.setItem(llaves.estudiantes, JSON.stringify(estudiantesDePrueba));
   }
@@ -229,6 +216,7 @@ function crearDatosIniciales() {
     localStorage.setItem(llaves.usuarios, JSON.stringify(unirPorId(usuariosGuardados, usuariosDePrueba)));
   }
 }
+
 
 function obtenerExamenes() {
   crearDatosIniciales();
@@ -248,10 +236,6 @@ function guardarUsuarios(usuarios) {
   localStorage.setItem(llaves.usuarios, JSON.stringify(usuarios));
 }
 
-// ============================================================================
-// NUEVO: Funciones para obtener y guardar estudiantes
-// Similar a obtenerUsuarios()/guardarUsuarios() pero para el nuevo módulo
-// ============================================================================
 function obtenerEstudiantes() {
   crearDatosIniciales();
   return (JSON.parse(localStorage.getItem(llaves.estudiantes)) || "[]").map(normalizarEstudiante);
@@ -260,6 +244,13 @@ function obtenerEstudiantes() {
 function guardarEstudiantes(estudiantes) {
   localStorage.setItem(llaves.estudiantes, JSON.stringify(estudiantes));
 }
+
+function obtenerExamenElegido() {
+  const idExamen = sessionStorage.getItem(llaves.examenElegido);
+  const examenes = obtenerExamenes();
+  return examenes.find((examen) => examen.id === idExamen) || examenes[0];
+}
+
 
 function obtenerSesion() {
   return JSON.parse(sessionStorage.getItem(llaves.sesion) || "null");
@@ -279,11 +270,6 @@ function cerrarSesion() {
   window.location.href = "login.html";
 }
 
-// ============================================================================
-// MODIFICADO: Protección de vistas privadas
-// AHORA incluye "estudiantes.html" como vista privada protegida
-// Antes solo protegía: usuarios.html y examenes.html
-// ============================================================================
 function protegerVistaPrivada() {
   const pagina = location.pathname.split("/").pop();
   const esPrivada = pagina === "usuarios.html" || pagina === "estudiantes.html" || pagina === "examenes.html";
@@ -293,36 +279,14 @@ function protegerVistaPrivada() {
   }
 }
 
-function obtenerExamenElegido() {
-  const idExamen = sessionStorage.getItem(llaves.examenElegido);
-  const examenes = obtenerExamenes();
-  return examenes.find((examen) => examen.id === idExamen) || examenes[0];
-}
-
-function limpiarTexto(texto) {
-  return String(texto ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function convertirTiempo(segundosTotales) {
-  const minutos = Math.floor(segundosTotales / 60).toString().padStart(2, "0");
-  const segundos = (segundosTotales % 60).toString().padStart(2, "0");
-  return `${minutos}:${segundos}`;
-}
-
-function crearId(prefijo) {
-  return `${prefijo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
 
 function iniciarEventosGlobales() {
   document.querySelectorAll("[data-cerrar-sesion]").forEach((boton) => {
     boton.addEventListener("click", cerrarSesion);
   });
 }
+
+
 
 function iniciarLogin() {
   const formulario = document.querySelector("#formularioLogin");
@@ -351,6 +315,7 @@ function iniciarLogin() {
     window.location.href = "usuarios.html";
   });
 }
+
 
 function iniciarUsuarios() {
   const formulario = document.querySelector("#formularioUsuario");
@@ -476,11 +441,7 @@ function iniciarUsuarios() {
   pintarUsuarios();
 }
 
-// ============================================================================
-// NUEVO: Función iniciarEstudiantes() - CRUD completo de estudiantes
-// Similar a iniciarUsuarios() pero adaptada para el modelo de estudiantes
-// Permite: Crear, Leer, Actualizar y Eliminar estudiantes
-// ============================================================================
+
 function iniciarEstudiantes() {
   const formulario = document.querySelector("#formularioEstudiante");
   const tabla = document.querySelector("#tablaEstudiantes");
@@ -489,12 +450,12 @@ function iniciarEstudiantes() {
   const campoEditando = formulario.querySelector("#estudianteEditando");
   const campoFecha = formulario.querySelector("#studentBirthDate");
   const mensaje = formulario.querySelector("#mensajeEstudiante");
-  // NUEVO: Limitar fecha máxima a hoy (no se pueden registrar estudiantes del futuro)
+
+  // No se permiten fechas de nacimiento futuras
   const hoyLocal = new Date();
   hoyLocal.setMinutes(hoyLocal.getMinutes() - hoyLocal.getTimezoneOffset());
   campoFecha.max = hoyLocal.toISOString().slice(0, 10);
 
-  // NUEVO: Helper para mostrar mensajes de error o éxito
   function mostrarMensaje(texto, esError = false) {
     mensaje.textContent = texto;
     mensaje.classList.toggle("error-message", esError);
@@ -507,7 +468,6 @@ function iniciarEstudiantes() {
     mostrarMensaje("");
   }
 
-  // NUEVO: Formatear fecha de YYYY-MM-DD a DD/MM/YYYY para mostrar
   function formatearFecha(fecha) {
     if (!fecha) return "No registrada";
     const [anio, mes, dia] = fecha.split("-");
@@ -588,9 +548,7 @@ function iniciarEstudiantes() {
     };
     const estudiantes = obtenerEstudiantes();
     const idOriginal = campoEditando.value;
-    // NUEVO: Validar que no exista otra identificación igual (excepto si es la misma en edición)
     const identificacionDuplicada = estudiantes.some((item) => item.id === estudiante.id && item.id !== idOriginal);
-    // NUEVO: Validar que no exista otro email igual (excepto si es el mismo en edición)
     const emailDuplicado = estudiantes.some((item) => item.email.toLowerCase() === estudiante.email && item.id !== idOriginal);
 
     if (identificacionDuplicada) {
@@ -868,7 +826,6 @@ class VistaCatalogoExamenes extends HTMLElement {
       <div class="hero-card">
         <span>Modulo publico</span>
         <h1>Selecciona un examen disponible</h1>
-        <!-- CAMBIO: Texto actualizado para reflejar el nuevo flujo de verificación -->
         <p>Elige una prueba, valida tu documento y responde dentro del tiempo establecido.</p>
       </div>
 
@@ -900,14 +857,6 @@ class VistaCatalogoExamenes extends HTMLElement {
   }
 }
 
-// ============================================================================
-// MODIFICADO: VistaRegistroEstudiante - AHORA SOLO PIDE IDENTIFICACIÓN
-// ============================================================================
-// ANTES: Pedía identificación Y nombre completo manualmente
-// AHORA: Solo pide identificación y verifica contra el registro de estudiantes
-// Si el estudiante NO existe → muestra mensaje de error y bloquea acceso
-// Si el estudiante EXISTE → toma nombre/email del registro y permite continuar
-// ============================================================================
 class VistaRegistroEstudiante extends HTMLElement {
   connectedCallback() {
     const examen = obtenerExamenElegido();
@@ -917,15 +866,12 @@ class VistaRegistroEstudiante extends HTMLElement {
       <form class="panel narrow-panel">
         <p class="code">${limpiarTexto(examen.code)}</p>
         <h1>${limpiarTexto(examen.title)}</h1>
-        <!-- CAMBIO: Texto actualizado - ya no pide nombre completo -->
         <p>Ingresa tu documento para validar que estés registrado antes de iniciar.</p>
 
-        <!-- CAMBIO: Solo se pide identificación (antes también pedía nombre completo) -->
         <label for="identificacion">Numero de identificacion</label>
         <input id="identificacion" type="text" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" title="Ingresa solo numeros, entre 6 y 12 digitos." required>
         <small class="field-help">Solo numeros, entre 6 y 12 digitos.</small>
 
-        <!-- NUEVO: Mensaje dinámico para mostrar error o éxito de verificación -->
         <p class="form-message student-access-message" aria-live="polite"></p>
 
         <div class="form-actions">
@@ -944,17 +890,10 @@ class VistaRegistroEstudiante extends HTMLElement {
         return;
       }
 
-      // ============================================================================
-      // NUEVO: Verificación de estudiante registrado
-      // Se busca en el registro de estudiantes (acme_students) por identificación
-      // ============================================================================
       const identificacion = formulario.querySelector("#identificacion").value.trim();
       const estudianteRegistrado = obtenerEstudiantes().find((item) => item.id === identificacion);
       const mensaje = formulario.querySelector(".student-access-message");
 
-      // ============================================================================
-      // NUEVO: Si el estudiante NO está registrado → bloquear acceso
-      // ============================================================================
       if (!estudianteRegistrado) {
         mensaje.textContent = "No puedes realizar el examen porque no estás registrado. Comunícate con un docente o administrativo.";
         mensaje.classList.add("error-message");
@@ -962,10 +901,6 @@ class VistaRegistroEstudiante extends HTMLElement {
         return;
       }
 
-      // ============================================================================
-      // NUEVO: Si el estudiante SÍ está registrado → usar sus datos del registro
-      // El nombre y email se toman automáticamente, no se piden manualmente
-      // ============================================================================
       const estudiante = {
         ...estudianteRegistrado,
         examId: examen.id,
@@ -1172,15 +1107,11 @@ class VistaResultadoExamen extends HTMLElement {
   }
 }
 
-// ============================================================================
-// INICIALIZACIÓN - AHORA INCLUYE iniciarEstudiantes()
-// ============================================================================
 crearDatosIniciales();
 protegerVistaPrivada();
 iniciarEventosGlobales();
 iniciarLogin();
 iniciarUsuarios();
-// NUEVO: Inicializar el módulo de estudiantes
 iniciarEstudiantes();
 iniciarExamenes();
 
